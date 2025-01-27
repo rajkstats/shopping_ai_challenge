@@ -44,6 +44,15 @@ Think of it like having different experts looking at shoes:
 - Categories: Sneakers, Boots, Dress shoes, Sandals
 - Resolution: 224x224 pixels, RGB format
 
+
+## Project Structure
+
+![Project Structure](shopping_lens/project_structure.png)
+
+## Architecture
+
+![Flow Chart](shopping_lens/flow_chart.png)
+
 ## 2. System Architecture
 
 ### Components
@@ -362,9 +371,6 @@ Think of the Autoencoder as an artist learning to draw shoes from memory:
 - Autoencoder is good at recreating shoes but we can't measure accuracy the same way
 - All models are still useful for finding similar shoes, just in different ways
 
-## Project Structure
-
-![Project Structure](shopping_lens/project_structure.png)
 
 Sources:
 - Model architectures: `models/` directory
