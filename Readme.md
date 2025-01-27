@@ -365,6 +365,9 @@ Think of the Autoencoder as an artist learning to draw shoes from memory:
 ## Project Structure
 
 shopping_lens/
+├── api/
+│   ├── __init__.py
+│   └── main.py
 ├── models/
 │ ├── cnn_feature_extractor.py
 │ ├── clip_model.py
