@@ -14,6 +14,7 @@ from ..models.vit_model import ViTFeatureExtractor
 from ..models.autoencoder_model import AutoencoderFeatureExtractor
 from ..utils.preprocessing import ImagePreprocessor
 from ..utils.similarity import SimilaritySearch
+from ..scripts.index_test_images import index_images
 
 app = FastAPI()
 
@@ -71,6 +72,26 @@ MODEL_CONFIGS = {
         'index_suffix': '_pretrained'
     }
 }
+
+# Add startup event
+@app.on_event("startup")
+async def startup_event():
+    """Create indices on startup if they don't exist"""
+    try:
+        # Check if indices exist
+        index_dir = Path(__file__).parent.parent / "data" / "index"
+        if not index_dir.exists() or not any(index_dir.iterdir()):
+            print("Creating indices...")
+            # Create indices for all models
+            for model_name in ['cnn', 'clip', 'vit', 'autoencoder']:
+                try:
+                    index_images(model_name, use_finetuned=False)
+                    index_images(model_name, use_finetuned=True)
+                except Exception as e:
+                    print(f"Error indexing {model_name}: {e}")
+            print("Indices created successfully")
+    except Exception as e:
+        print(f"Error during startup: {e}")
 
 @app.get("/")
 async def root():

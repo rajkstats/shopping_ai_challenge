@@ -1,9 +1,8 @@
-
 __pycache__/
 *.pth
 *.pt
 *.bin
-data/
+data/index/
 models/weights/
 *.pyc
 
