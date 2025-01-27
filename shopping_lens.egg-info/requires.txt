@@ -1,0 +1,15 @@
+torch
+torchvision
+fastapi
+uvicorn
+python-multipart
+Pillow
+numpy
+faiss-cpu
+scikit-learn
+tqdm
+opencv-python
+imagehash
+requests
+urllib3
+pathlib

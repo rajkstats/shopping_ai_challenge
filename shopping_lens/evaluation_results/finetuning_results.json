@@ -1,0 +1,22 @@
+{
+    "cnn": {
+        "train_loss": 7.529237747192383,
+        "test_loss": 6.897992134094238,
+        "accuracy": 7.894736842105263
+    },
+    "clip": {
+        "train_loss": 0.06821910664439201,
+        "test_loss": 0.057616377249360085,
+        "accuracy": 100.0
+    },
+    "vit": {
+        "train_loss": 0.0,
+        "test_loss": 0.0,
+        "accuracy": 100.0
+    },
+    "autoencoder": {
+        "train_loss": 1.730224072933197,
+        "test_loss": 1.860670804977417,
+        "accuracy": 0
+    }
+}

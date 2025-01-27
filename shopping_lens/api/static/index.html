@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shopping Lens</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px 40px;
+            background-color: #f5f5f5;
+        }
+        
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+        }
+        
+        .main-container {
+            display: grid;
+            grid-template-columns: 350px 1fr;
+            gap: 40px;
+            margin-top: 40px;
+        }
+        
+        .left-panel {
+            position: sticky;
+            top: 20px;
+            height: fit-content;
+        }
+        
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        
+        .choose-image-btn {
+            padding: 12px 24px;
+            background-color: #4a4a4a;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 500;
+            width: 100%;
+        }
+        
+        .choose-image-btn:hover {
+            background-color: #333;
+            transform: translateY(-2px);
+        }
+        
+        .find-products-btn {
+            padding: 12px 24px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 500;
+            width: 100%;
+        }
+        
+        .find-products-btn:hover {
+            background-color: #0056b3;
+            transform: translateY(-2px);
+        }
+        
+        select {
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+            font-size: 14px;
+            width: 100%;
+            cursor: pointer;
+        }
+        
+        .query-image {
+            margin-bottom: 30px;
+            background: white;
+            padding: 20px;
+            border-radius: 16px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        }
+        
+        .query-image img {
+            width: 100%;
+            border-radius: 12px;
+            display: block;
+        }
+        
+        #similarProducts {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 25px;
+        }
+        
+        .result-item {
+            background: white;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            transition: all 0.3s ease;
+        }
+        
+        .result-item:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+        }
+        
+        .result-item img {
+            width: 100%;
+            height: 280px;
+            object-fit: cover;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .similarity-info {
+            padding: 16px;
+            background: white;
+        }
+        
+        .similarity-score {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+            text-align: center;
+            margin-bottom: 12px;
+        }
+        
+        .similarity-bar {
+            height: 8px;
+            background-color: #eee;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 0 4px;
+        }
+        
+        .similarity-fill {
+            height: 100%;
+            transition: width 0.6s ease-out;
+        }
+        
+        .high-score {
+            background: linear-gradient(to right, #4CAF50, #45a049);
+        }
+        
+        .medium-score {
+            background: linear-gradient(to right, #FFC107, #ffa000);
+        }
+        
+        .low-score {
+            background: linear-gradient(to right, #FF5722, #f4511e);
+        }
+        
+        .section-title {
+            font-size: 20px;
+            color: #333;
+            margin: 0 0 15px 0;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #eee;
+            font-weight: 600;
+        }
+
+        .loading {
+            opacity: 0.7;
+            pointer-events: none;
+        }
+
+        @media (max-width: 1024px) {
+            .main-container {
+                grid-template-columns: 1fr;
+            }
+            
+            .left-panel {
+                position: static;
+                max-width: 600px;
+                margin: 0 auto;
+            }
+            
+            .controls {
+                flex-direction: row;
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+            
+            .choose-image-btn, .find-products-btn, select {
+                width: auto;
+                min-width: 200px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 15px;
+            }
+            
+            #similarProducts {
+                grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+                gap: 20px;
+            }
+            
+            .controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .choose-image-btn, .find-products-btn, select {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>Shopping Lens</h1>
+    
+    <div class="main-container">
+        <div class="left-panel">
+            <div class="controls">
+                <input type="file" id="imageInput" accept="image/*" style="display: none;">
+                <button class="choose-image-btn" onclick="document.getElementById('imageInput').click()">Choose Image</button>
+                <select id="modelSelect">
+                    <option value="cnn">CNN (Fine-tuned)</option>
+                    <option value="cnn_pretrained">CNN (Pre-trained)</option>
+                    <option value="clip">CLIP (Fine-tuned)</option>
+                    <option value="clip_pretrained">CLIP (Pre-trained)</option>
+                    <option value="vit">ViT (Fine-tuned)</option>
+                    <option value="vit_pretrained">ViT (Pre-trained)</option>
+                    <option value="autoencoder">Autoencoder (Fine-tuned)</option>
+                    <option value="autoencoder_pretrained">Autoencoder (Pre-trained)</option>
+                </select>
+                <button class="find-products-btn" onclick="findSimilarProducts()">Find Similar Products</button>
+            </div>
+            
+            <div class="query-image">
+                <h2 class="section-title">Query Image</h2>
+                <img id="queryImage" style="display: none;">
+            </div>
+        </div>
+        
+        <div class="right-panel">
+            <h2 class="section-title">Similar Products</h2>
+            <div id="similarProducts"></div>
+        </div>
+    </div>
+
+    <script>
+        let selectedFile = null;
+        
+        document.getElementById('imageInput').addEventListener('change', function(e) {
+            selectedFile = e.target.files[0];
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const img = document.getElementById('queryImage');
+                img.src = event.target.result;
+                img.style.display = 'block';
+            };
+            reader.readAsDataURL(selectedFile);
+        });
+        
+        async function findSimilarProducts() {
+            const fileInput = document.getElementById('imageInput');
+            const modelSelect = document.getElementById('modelSelect');
+            const similarProducts = document.getElementById('similarProducts');
+            
+            if (!fileInput.files[0]) {
+                alert('Please select an image first');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+            
+            try {
+                const response = await fetch(`/search?model_name=${modelSelect.value}`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                displayResults(data.similar_images);
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error finding similar products');
+            }
+        }
+        
+        function getScoreClass(similarity) {
+            if (similarity >= 70) return 'high-score';
+            if (similarity >= 40) return 'medium-score';
+            return 'low-score';
+        }
+        
+        function displayResults(results) {
+            const container = document.getElementById('similarProducts');
+            container.innerHTML = '';
+
+            if (!results.length) {
+                container.innerHTML = '<div style="text-align: center;">No similar products found</div>';
+                return;
+            }
+
+            results.forEach(result => {
+                console.log('Raw similarity:', result.similarity);
+                const percentage = Math.round(result.similarity);
+                console.log('Converted percentage:', percentage);
+                
+                const scoreClass = getScoreClass(percentage);
+
+                const div = document.createElement('div');
+                div.className = 'result-item';
+                div.innerHTML = `
+                    <img src="/images/${result.path}" alt="Similar product">
+                    <div class="similarity-info">
+                        <div class="similarity-score">${percentage}% Match</div>
+                        <div class="similarity-bar">
+                            <div class="similarity-fill ${scoreClass}" style="width: ${percentage}%"></div>
+                        </div>
+                    </div>
+                `;
+                
+                container.appendChild(div);
+            });
+        }
+    </script>
+</body>
+</html>

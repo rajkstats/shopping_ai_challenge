@@ -1,0 +1,25 @@
+{
+    "timestamp": "20250127_150731",
+    "pre_tuning": {
+        "cnn": {
+            "precision": NaN,
+            "recall": NaN,
+            "retrieval_time": 0.5
+        },
+        "clip": {
+            "precision": NaN,
+            "recall": NaN,
+            "retrieval_time": 0.5
+        },
+        "vit": {
+            "precision": NaN,
+            "recall": NaN,
+            "retrieval_time": 0.5
+        },
+        "autoencoder": {
+            "precision": NaN,
+            "recall": NaN,
+            "retrieval_time": 0.5
+        }
+    }
+}

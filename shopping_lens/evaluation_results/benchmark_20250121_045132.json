@@ -1,0 +1,47 @@
+{
+    "timestamp": "20250121_045132",
+    "pre_tuning": {
+        "cnn": {
+            "precision": 0.3125,
+            "recall": 0.10416666666666667,
+            "retrieval_time": 0.572399765253067
+        },
+        "clip": {
+            "precision": 0.36250000000000004,
+            "recall": 0.12083333333333333,
+            "retrieval_time": 0.5508625358343124
+        },
+        "vit": {
+            "precision": 0.4,
+            "recall": 0.13333333333333336,
+            "retrieval_time": 0.8374057710170746
+        },
+        "autoencoder": {
+            "precision": 0.3125,
+            "recall": 0.10416666666666667,
+            "retrieval_time": 0.4152640551328659
+        }
+    },
+    "post_tuning": {
+        "cnn": {
+            "precision": 0.3125,
+            "recall": 0.10416666666666667,
+            "retrieval_time": 0.5453638285398483
+        },
+        "clip": {
+            "precision": 0.36250000000000004,
+            "recall": 0.12083333333333333,
+            "retrieval_time": 0.5491408258676529
+        },
+        "vit": {
+            "precision": 0.4,
+            "recall": 0.13333333333333336,
+            "retrieval_time": 0.7951965779066086
+        },
+        "autoencoder": {
+            "precision": 0.3125,
+            "recall": 0.10416666666666667,
+            "retrieval_time": 0.4244050532579422
+        }
+    }
+}
