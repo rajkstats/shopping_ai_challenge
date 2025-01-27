@@ -366,20 +366,33 @@ Think of the Autoencoder as an artist learning to draw shoes from memory:
 
 shopping_lens/
 ├── api/
-│   ├── __init__.py
-│   └── main.py
+│ ├── init.py
+│ ├── main.py
+│ └── static/
+│ └── index.html
 ├── models/
+│ ├── init.py
+│ ├── base_model.py
 │ ├── cnn_feature_extractor.py
 │ ├── clip_model.py
 │ ├── vit_model.py
 │ └── autoencoder_model.py
 ├── scripts/
+│ ├── download_test_images.py
 │ ├── evaluate_models.py
 │ ├── fine_tune_models.py
-│ └── index_images.py
-└── utils/
-├── preprocessing.py
-└── similarity.py
+│ ├── index_images.py
+│ ├── index_test_images.py
+│ ├── reset_data.py
+│ ├── setup_data.py
+│ └── train_autoencoder.py
+├── utils/
+│ ├── init.py
+│ ├── preprocessing.py
+│ └── similarity.py
+└── evaluation_results/
+└── finetuning_results.json
+
 
 Sources:
 - Model architectures: `models/` directory
