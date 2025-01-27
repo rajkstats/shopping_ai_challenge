@@ -364,35 +364,7 @@ Think of the Autoencoder as an artist learning to draw shoes from memory:
 
 ## Project Structure
 
-shopping_lens/
-├── api/
-│ ├── init.py
-│ ├── main.py
-│ └── static/
-│ └── index.html
-├── models/
-│ ├── init.py
-│ ├── base_model.py
-│ ├── cnn_feature_extractor.py
-│ ├── clip_model.py
-│ ├── vit_model.py
-│ └── autoencoder_model.py
-├── scripts/
-│ ├── download_test_images.py
-│ ├── evaluate_models.py
-│ ├── fine_tune_models.py
-│ ├── index_images.py
-│ ├── index_test_images.py
-│ ├── reset_data.py
-│ ├── setup_data.py
-│ └── train_autoencoder.py
-├── utils/
-│ ├── init.py
-│ ├── preprocessing.py
-│ └── similarity.py
-└── evaluation_results/
-└── finetuning_results.json
-
+![Project Structure](shopping_lens/project_structure.png)
 
 Sources:
 - Model architectures: `models/` directory
