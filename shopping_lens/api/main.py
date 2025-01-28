@@ -10,6 +10,7 @@ import logging
 import gc
 import torch.cuda
 from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.middleware.cors import CORSMiddleware
 
 # Import all models
 from ..models.cnn_feature_extractor import CNNFeatureExtractor
@@ -87,18 +88,29 @@ MODEL_CONFIGS = {
     }
 }
 
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Add gzip compression
 app.add_middleware(GZipMiddleware, minimum_size=500)
 
-# Mount static files with caching
-app.mount("/static", StaticFiles(directory=str(static_dir), html=True), name="static")
-app.mount("/images", 
-    StaticFiles(
-        directory=str(test_images_dir),
-        headers={"Cache-Control": "public, max-age=3600"}
-    ), 
-    name="images"
-)
+# Mount static files
+app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+app.mount("/images", StaticFiles(directory=str(test_images_dir)), name="images")
+
+# Add cache control middleware
+@app.middleware("http")
+async def add_cache_control_header(request, call_next):
+    response = await call_next(request)
+    if request.url.path.startswith("/images/"):
+        response.headers["Cache-Control"] = "public, max-age=3600"
+    return response
 
 # Add model cache
 model_cache = {}
@@ -187,11 +199,22 @@ async def search(model_name: str, file: UploadFile):
             raise HTTPException(status_code=400, detail=f"Invalid model name: {model_name}")
         
         config = MODEL_CONFIGS[model_name]
+        logger.info(f"Processing request for model: {model_name}")
         
-        # Check if index exists first
+        # Check index first
         base_model_name = model_name.split('_')[0]
         index_path = BASE_DIR / "data" / "index" / f"{base_model_name}{config['index_suffix']}_index"
-        if not (Path(str(index_path) + ".faiss").exists() and Path(str(index_path) + ".meta").exists()):
+        faiss_path = Path(str(index_path) + ".faiss")
+        meta_path = Path(str(index_path) + ".meta")
+        
+        # Debug logging
+        logger.info(f"Looking for index files at:")
+        logger.info(f"FAISS path: {faiss_path} (exists: {faiss_path.exists()})")
+        logger.info(f"Meta path: {meta_path} (exists: {meta_path.exists()})")
+        logger.info(f"Base directory: {BASE_DIR}")
+        logger.info(f"Available indices: {list(index_dir.glob('*'))}")
+        
+        if not (faiss_path.exists() and meta_path.exists()):
             raise HTTPException(
                 status_code=500,
                 detail=f"Index not found for {model_name}. Available indices: {list(index_dir.glob('*'))}"
