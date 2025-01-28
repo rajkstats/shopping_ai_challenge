@@ -102,6 +102,24 @@ async def get_image(image_name: str):
     image_path = Path(__file__).parent.parent / "data" / "test_images" / image_name
     return FileResponse(str(image_path))
 
+# Add error handling for model loading
+def load_model(model_name, config):
+    try:
+        model = config['class']()
+        
+        # Load weights if available and exists
+        if 'weights_path' in config:
+            weights_path = Path(config['weights_path'])
+            if weights_path.exists():
+                model.load_state_dict(torch.load(weights_path, map_location='cpu'))
+                print(f"Loaded weights for {model_name} from {weights_path}")
+            else:
+                print(f"Warning: No weights found at {weights_path}, using base model")
+        return model
+    except Exception as e:
+        print(f"Error loading model {model_name}: {e}")
+        return None
+
 @app.post("/search")
 async def search(model_name: str, file: UploadFile):
     try:
@@ -109,13 +127,20 @@ async def search(model_name: str, file: UploadFile):
             raise HTTPException(status_code=400, detail=f"Invalid model name: {model_name}")
             
         config = MODEL_CONFIGS[model_name]
-        model = config['class']()
+        model = load_model(model_name, config)
         
-        # Load weights if available
-        if 'weights_path' in config:
-            weights_path = Path(config['weights_path'])
-            if weights_path.exists():
-                model.load_state_dict(torch.load(weights_path, map_location='cpu'))
+        if model is None:
+            # Fallback to pretrained version if available
+            pretrained_name = f"{model_name}_pretrained"
+            if pretrained_name in MODEL_CONFIGS:
+                print(f"Falling back to pretrained model: {pretrained_name}")
+                model = load_model(pretrained_name, MODEL_CONFIGS[pretrained_name])
+            
+            if model is None:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Failed to load model {model_name} and its fallback"
+                )
         
         preprocessor = ImagePreprocessor()
         similarity_search = SimilaritySearch(dimension=config['dimension'])
@@ -123,7 +148,17 @@ async def search(model_name: str, file: UploadFile):
         # Use the correct index suffix
         base_model_name = model_name.split('_')[0]
         index_path = BASE_DIR / "data" / "index" / f"{base_model_name}{config['index_suffix']}_index"
-        similarity_search.load_index(str(index_path))
+        
+        if not index_path.exists():
+            print(f"Creating index for {model_name}...")
+            # Create index directory if it doesn't exist
+            index_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            # Initialize empty index
+            similarity_search.initialize_index(config['dimension'])
+            similarity_search.save_index(str(index_path))
+        else:
+            similarity_search.load_index(str(index_path))
         
         contents = await file.read()
         image = Image.open(io.BytesIO(contents)).convert('RGB')
@@ -148,6 +183,11 @@ async def search(model_name: str, file: UploadFile):
     except Exception as e:
         print(f"Error in search: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+# Add health check endpoint
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy"}
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8001))

@@ -4,7 +4,13 @@ services:
     env: python
     buildCommand: |
       python -m pip install --upgrade pip
-      apt-get update && apt-get install -y python3-opencv
+      apt-get update && apt-get install -y \
+        python3-opencv \
+        libgl1-mesa-glx \
+        libglib2.0-0 \
+        libsm6 \
+        libxext6 \
+        libxrender-dev
       pip install -r requirements.txt
       mkdir -p shopping_lens/data/test_images
       python -m shopping_lens.scripts.download_test_images
@@ -15,4 +21,6 @@ services:
       - key: PYTHONPATH
         value: .
       - key: DEBIAN_FRONTEND
-        value: noninteractive 
+        value: noninteractive
+    healthCheckPath: /health
+    healthCheckTimeout: 100 
