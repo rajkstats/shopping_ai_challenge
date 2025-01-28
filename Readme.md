@@ -392,9 +392,8 @@ Sources:
 
 1. Implement hybrid models combining multiple architectures
 2. Add text-based search capabilities
-3. Optimize inference time for ViT model
-4. Explore few-shot learning approaches
-5. Add support for multi-modal queries
+3. Explore few-shot learning approaches
+4. Add support for multi-modal queries
 
 ## Acknowledgments
 

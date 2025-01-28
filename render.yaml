@@ -2,8 +2,14 @@ services:
   - type: web
     name: shopping-lens
     env: python
-    buildCommand: pip install -r requirements.txt
+    buildCommand: |
+      python -m pip install --upgrade pip
+      pip install -r requirements.txt
+      mkdir -p shopping_lens/data/test_images
+      python -m shopping_lens.scripts.download_test_images
     startCommand: uvicorn shopping_lens.api.main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: PYTHON_VERSION
-        value: 3.9 
+        value: 3.9
+      - key: PYTHONPATH
+        value: . 
