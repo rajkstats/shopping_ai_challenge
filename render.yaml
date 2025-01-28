@@ -14,15 +14,9 @@ services:
       pip install -r requirements.txt
       mkdir -p shopping_lens/data/test_images
       mkdir -p shopping_lens/data/index
-      echo "Source index files:"
-      ls -la shopping_lens/data/index/
-      cp -rv shopping_lens/data/index/* shopping_lens/data/index/
-      echo "Destination index files:"
-      ls -la shopping_lens/data/index/
-      mkdir -p /opt/render/.cache/torch/hub/checkpoints
+      mkdir -p shopping_lens/models/pretrained
       python -m shopping_lens.scripts.download_models
       python -m shopping_lens.scripts.download_test_images
-      find shopping_lens/data/test_images -name "*.jpg" -exec convert {} -strip -quality 80 {} \;
     startCommand: uvicorn shopping_lens.api.main:app --host 0.0.0.0 --port $PORT --workers 1
     envVars:
       - key: PYTHON_VERSION
@@ -46,4 +40,6 @@ services:
       name: data
       mountPath: /opt/render/project/src/shopping_lens/data
       sizeGB: 1
+    persistentDirs:
+      - /opt/render/project/src/shopping_lens/models/pretrained
     plan: starter 

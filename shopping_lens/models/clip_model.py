@@ -3,15 +3,30 @@ import torch.nn as nn
 from transformers import CLIPProcessor, CLIPModel
 from torchvision import transforms
 from .base_model import BaseModel
+from pathlib import Path
 
 class CLIPFeatureExtractor(BaseModel):
     def __init__(self):
         super().__init__()
-        self.model = None
-        self.processor = None
-        self.feature_dimension = 512
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.feature_dimension = 512
         self.classes = None  # Will be set during training
+        
+        # Load from cached model if available
+        models_dir = Path(__file__).parent.parent / "models" / "pretrained"
+        clip_dir = models_dir / "clip"
+        
+        if clip_dir.exists():
+            print("Loading cached CLIP model...")
+            self.model = CLIPModel.from_pretrained(str(clip_dir))
+            self.processor = CLIPProcessor.from_pretrained(str(clip_dir))
+        else:
+            print("Loading pretrained CLIP model...")
+            self.model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
+            self.processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+        
+        self.model = self.model.to(self.device)
+        self.model.eval()
     
     def set_classes(self, classes):
         """Set class names for text prompts"""
@@ -57,9 +72,3 @@ class CLIPFeatureExtractor(BaseModel):
             features = torch.nn.functional.normalize(features, p=2, dim=1)
             
             return features.cpu()  # Return features on CPU for storage
-
-    def load_pretrained(self, model_path, processor_path):
-        self.model = CLIPModel.from_pretrained(model_path)
-        self.processor = CLIPProcessor.from_pretrained(processor_path)
-        self.model = self.model.to(self.device)
-        self.model.eval()

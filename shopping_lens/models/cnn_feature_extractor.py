@@ -4,16 +4,28 @@ from torchvision import models, transforms
 from torchvision.models import ResNet50_Weights
 from PIL import Image
 from .base_model import BaseModel
+from pathlib import Path
 
 class CNNFeatureExtractor(BaseModel):
     def __init__(self):
         super().__init__()
-        # Initialize with pretrained weights by default
-        self.model = models.resnet50(weights=ResNet50_Weights.IMAGENET1K_V1)
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.feature_dimension = 2048
+        
+        # Load from cached model if available
+        models_dir = Path(__file__).parent.parent / "models" / "pretrained"
+        cached_path = models_dir / "resnet50.pth"
+        
+        if cached_path.exists():
+            print("Loading cached ResNet50 model...")
+            self.model = models.resnet50()
+            self.model.load_state_dict(torch.load(cached_path, map_location=self.device))
+        else:
+            print("Loading pretrained ResNet50 model...")
+            self.model = models.resnet50(weights=ResNet50_Weights.IMAGENET1K_V1)
+        
         # Remove the final FC layer
         self.model = nn.Sequential(*list(self.model.children())[:-1])
-        self.feature_dimension = 2048
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.model = self.model.to(self.device)
         self.model.eval()
 
