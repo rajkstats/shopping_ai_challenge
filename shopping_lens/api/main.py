@@ -94,17 +94,6 @@ async def startup_event():
             from ..scripts.download_test_images import download_images
             download_images()
         
-        # Create indices if they don't exist
-        if not any(index_dir.glob("*_index")):
-            logger.info("Creating indices...")
-            for model_name in ['cnn', 'clip', 'vit', 'autoencoder']:
-                try:
-                    logger.info(f"Creating index for {model_name}...")
-                    index_images(model_name, use_finetuned=False)
-                    index_images(model_name, use_finetuned=True)
-                except Exception as e:
-                    logger.error(f"Error indexing {model_name}: {e}")
-        
         logger.info("Application initialization complete")
     except Exception as e:
         logger.error(f"Error during startup: {e}")
