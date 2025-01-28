@@ -1,5 +1,10 @@
 # Shopping Lens: Visual Search for E-commerce
 
+## Shopping Lens
+
+![Shopping Lens](shopping_lens/shop_lens.png)
+
+
 ## Table of Contents
 1. Project Overview & Demo
 2. System Architecture
