@@ -82,6 +82,10 @@ MODEL_CONFIGS = {
     }
 }
 
+# At the top of the file, after app initialization
+app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+app.mount("/images", StaticFiles(directory=str(test_images_dir)), name="images")
+
 @app.on_event("startup")
 async def startup_event():
     """Initialize app on startup"""
@@ -153,7 +157,7 @@ async def search(model_name: str, file: UploadFile):
             # Fallback to pretrained version if available
             pretrained_name = f"{model_name}_pretrained"
             if pretrained_name in MODEL_CONFIGS:
-                print(f"Falling back to pretrained model: {pretrained_name}")
+                logger.info(f"Falling back to pretrained model: {pretrained_name}")
                 model = load_model(pretrained_name, MODEL_CONFIGS[pretrained_name])
             
             if model is None:
@@ -169,16 +173,34 @@ async def search(model_name: str, file: UploadFile):
         base_model_name = model_name.split('_')[0]
         index_path = BASE_DIR / "data" / "index" / f"{base_model_name}{config['index_suffix']}_index"
         
-        if not index_path.exists():
-            print(f"Creating index for {model_name}...")
-            # Create index directory if it doesn't exist
-            index_path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            if not index_path.exists():
+                logger.error(f"Index not found at {index_path}")
+                # Try using pretrained index if finetuned not found
+                if config['index_suffix'] == '_finetuned':
+                    pretrained_index = BASE_DIR / "data" / "index" / f"{base_model_name}_pretrained_index"
+                    if pretrained_index.exists():
+                        logger.info(f"Using pretrained index instead: {pretrained_index}")
+                        index_path = pretrained_index
+                    else:
+                        raise HTTPException(
+                            status_code=500,
+                            detail=f"No index found for {model_name}"
+                        )
+                else:
+                    raise HTTPException(
+                        status_code=500,
+                        detail=f"No index found for {model_name}"
+                    )
             
-            # Initialize empty index
-            similarity_search.initialize_index(config['dimension'])
-            similarity_search.save_index(str(index_path))
-        else:
             similarity_search.load_index(str(index_path))
+            
+        except Exception as e:
+            logger.error(f"Error loading index: {e}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to load index for {model_name}: {str(e)}"
+            )
         
         contents = await file.read()
         image = Image.open(io.BytesIO(contents)).convert('RGB')
@@ -186,22 +208,34 @@ async def search(model_name: str, file: UploadFile):
         temp_path = BASE_DIR / "data" / "temp.jpg"
         image.save(temp_path)
         
-        image_tensor = preprocessor.preprocess_image(str(temp_path))
-        features = model.extract_features(image_tensor)
-        paths, scores = similarity_search.search(features, k=5)
+        try:
+            image_tensor = preprocessor.preprocess_image(str(temp_path))
+            features = model.extract_features(image_tensor)
+            paths, scores = similarity_search.search(features, k=5)
+            
+            if temp_path.exists():
+                temp_path.unlink()
+            
+            results = [
+                {"path": Path(path).name, "similarity": float(score)} 
+                for path, score in zip(paths, scores)
+            ]
+            
+            return {"similar_images": results}
+            
+        except Exception as e:
+            logger.error(f"Error during search: {e}")
+            if temp_path.exists():
+                temp_path.unlink()
+            raise HTTPException(
+                status_code=500,
+                detail=f"Search failed: {str(e)}"
+            )
         
-        if temp_path.exists():
-            temp_path.unlink()
-        
-        results = [
-            {"path": Path(path).name, "similarity": float(score)} 
-            for path, score in zip(paths, scores)
-        ]
-        
-        return {"similar_images": results}
-        
+    except HTTPException:
+        raise
     except Exception as e:
-        print(f"Error in search: {str(e)}")
+        logger.error(f"Unexpected error in search: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # Add health check endpoint
