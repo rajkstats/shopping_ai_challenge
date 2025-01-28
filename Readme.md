@@ -253,6 +253,7 @@ If you get a port binding error (address already in use), free port 8001:
 ```bash
 lsof -i :8001 # Find process using port 8001
 kill -9 <PID> # Kill the process
+```
 
 ## Features
 
