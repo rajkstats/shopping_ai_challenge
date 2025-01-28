@@ -9,6 +9,7 @@ import os
 import logging
 import gc
 import torch.cuda
+from fastapi.middleware.gzip import GZipMiddleware
 
 # Import all models
 from ..models.cnn_feature_extractor import CNNFeatureExtractor
@@ -41,13 +42,11 @@ MODEL_CONFIGS = {
         'class': CNNFeatureExtractor,
         'dimension': 2048,
         'weights_path': str(BASE_DIR / 'models/weights/cnn_finetuned.pth'),
-        'pretrained_path': str(BASE_DIR / 'models/pretrained/resnet50_pretrained.pth'),
         'index_suffix': '_finetuned'
     },
     'cnn_pretrained': {
         'class': CNNFeatureExtractor,
         'dimension': 2048,
-        'weights_path': str(BASE_DIR / 'models/pretrained/resnet50_pretrained.pth'),
         'index_suffix': '_pretrained'
     },
     'clip': {
@@ -88,9 +87,18 @@ MODEL_CONFIGS = {
     }
 }
 
-# At the top of the file, after app initialization
-app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
-app.mount("/images", StaticFiles(directory=str(test_images_dir)), name="images")
+# Add gzip compression
+app.add_middleware(GZipMiddleware, minimum_size=500)
+
+# Mount static files with caching
+app.mount("/static", StaticFiles(directory=str(static_dir), html=True), name="static")
+app.mount("/images", 
+    StaticFiles(
+        directory=str(test_images_dir),
+        headers={"Cache-Control": "public, max-age=3600"}
+    ), 
+    name="images"
+)
 
 # Add model cache
 model_cache = {}
@@ -179,95 +187,88 @@ async def search(model_name: str, file: UploadFile):
             raise HTTPException(status_code=400, detail=f"Invalid model name: {model_name}")
         
         config = MODEL_CONFIGS[model_name]
-        model = None
         
-        try:
-            model = load_model(model_name, config)
-            if model is None:
-                # Fallback to pretrained
-                pretrained_name = f"{model_name}_pretrained"
-                if pretrained_name in MODEL_CONFIGS:
-                    logger.info(f"Falling back to pretrained model: {pretrained_name}")
-                    model = load_model(pretrained_name, MODEL_CONFIGS[pretrained_name])
+        # Check if index exists first
+        base_model_name = model_name.split('_')[0]
+        index_path = BASE_DIR / "data" / "index" / f"{base_model_name}{config['index_suffix']}_index"
+        if not (Path(str(index_path) + ".faiss").exists() and Path(str(index_path) + ".meta").exists()):
+            raise HTTPException(
+                status_code=500,
+                detail=f"Index not found for {model_name}. Available indices: {list(index_dir.glob('*'))}"
+            )
+        
+        # Then load model
+        model = load_model(model_name, config)
+        if model is None:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to load model {model_name}"
+            )
             
-            if model is None:
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Failed to load model {model_name} and its fallback"
-                )
-            
-            preprocessor = ImagePreprocessor()
-            similarity_search = SimilaritySearch(dimension=config['dimension'])
-            
-            # Use the correct index suffix
-            base_model_name = model_name.split('_')[0]
-            index_path = BASE_DIR / "data" / "index" / f"{base_model_name}{config['index_suffix']}_index"
-            faiss_path = Path(str(index_path) + ".faiss")
-            meta_path = Path(str(index_path) + ".meta")
-            
-            if not (faiss_path.exists() and meta_path.exists()):
-                logger.error(f"Index files not found at {index_path}")
-                logger.error(f"FAISS exists: {faiss_path.exists()}, Meta exists: {meta_path.exists()}")
-                # Try using pretrained index if finetuned not found
-                if config['index_suffix'] == '_finetuned':
-                    pretrained_base = BASE_DIR / "data" / "index" / f"{base_model_name}_pretrained_index"
-                    pretrained_faiss = Path(str(pretrained_base) + ".faiss")
-                    pretrained_meta = Path(str(pretrained_base) + ".meta")
-                    if pretrained_faiss.exists() and pretrained_meta.exists():
-                        logger.info(f"Using pretrained index instead: {pretrained_base}")
-                        index_path = pretrained_base
-                        faiss_path = pretrained_faiss
-                        meta_path = pretrained_meta
-                    else:
-                        raise HTTPException(
-                            status_code=500,
-                            detail=f"No index found for {model_name}"
-                        )
+        preprocessor = ImagePreprocessor()
+        similarity_search = SimilaritySearch(dimension=config['dimension'])
+        
+        # Use the correct index suffix
+        base_model_name = model_name.split('_')[0]
+        index_path = BASE_DIR / "data" / "index" / f"{base_model_name}{config['index_suffix']}_index"
+        faiss_path = Path(str(index_path) + ".faiss")
+        meta_path = Path(str(index_path) + ".meta")
+        
+        if not (faiss_path.exists() and meta_path.exists()):
+            logger.error(f"Index files not found at {index_path}")
+            logger.error(f"FAISS exists: {faiss_path.exists()}, Meta exists: {meta_path.exists()}")
+            # Try using pretrained index if finetuned not found
+            if config['index_suffix'] == '_finetuned':
+                pretrained_base = BASE_DIR / "data" / "index" / f"{base_model_name}_pretrained_index"
+                pretrained_faiss = Path(str(pretrained_base) + ".faiss")
+                pretrained_meta = Path(str(pretrained_base) + ".meta")
+                if pretrained_faiss.exists() and pretrained_meta.exists():
+                    logger.info(f"Using pretrained index instead: {pretrained_base}")
+                    index_path = pretrained_base
+                    faiss_path = pretrained_faiss
+                    meta_path = pretrained_meta
                 else:
                     raise HTTPException(
                         status_code=500,
                         detail=f"No index found for {model_name}"
                     )
-            
-            similarity_search.load_index(str(index_path))
-            
-            contents = await file.read()
-            image = Image.open(io.BytesIO(contents)).convert('RGB')
-            
-            temp_path = BASE_DIR / "data" / "temp.jpg"
-            image.save(temp_path)
-            
-            try:
-                image_tensor = preprocessor.preprocess_image(str(temp_path))
-                features = model.extract_features(image_tensor)
-                paths, scores = similarity_search.search(features, k=5)
-                
-                if temp_path.exists():
-                    temp_path.unlink()
-                
-                results = [
-                    {"path": Path(path).name, "similarity": float(score)} 
-                    for path, score in zip(paths, scores)
-                ]
-                
-                return {"similar_images": results}
-                
-            except Exception as e:
-                logger.error(f"Error during search: {e}")
-                if temp_path.exists():
-                    temp_path.unlink()
+            else:
                 raise HTTPException(
                     status_code=500,
-                    detail=f"Search failed: {str(e)}"
+                    detail=f"No index found for {model_name}"
                 )
-            
-        finally:
-            # Clean up
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-            gc.collect()
         
-        return {"similar_images": results}
+        similarity_search.load_index(str(index_path))
+        
+        contents = await file.read()
+        image = Image.open(io.BytesIO(contents)).convert('RGB')
+        
+        temp_path = BASE_DIR / "data" / "temp.jpg"
+        image.save(temp_path)
+        
+        try:
+            image_tensor = preprocessor.preprocess_image(str(temp_path))
+            features = model.extract_features(image_tensor)
+            paths, scores = similarity_search.search(features, k=5)
+            
+            if temp_path.exists():
+                temp_path.unlink()
+            
+            results = [
+                {"path": Path(path).name, "similarity": float(score)} 
+                for path, score in zip(paths, scores)
+            ]
+            
+            return {"similar_images": results}
+            
+        except Exception as e:
+            logger.error(f"Error during search: {e}")
+            if temp_path.exists():
+                temp_path.unlink()
+            raise HTTPException(
+                status_code=500,
+                detail=f"Search failed: {str(e)}"
+            )
         
     except Exception as e:
         logger.error(f"Error in search: {str(e)}")

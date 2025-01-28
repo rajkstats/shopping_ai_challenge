@@ -22,7 +22,8 @@ services:
       mkdir -p /opt/render/.cache/torch/hub/checkpoints
       python -m shopping_lens.scripts.download_models
       python -m shopping_lens.scripts.download_test_images
-    startCommand: uvicorn shopping_lens.api.main:app --host 0.0.0.0 --port $PORT --log-level debug
+      find shopping_lens/data/test_images -name "*.jpg" -exec convert {} -strip -quality 80 {} \;
+    startCommand: uvicorn shopping_lens.api.main:app --host 0.0.0.0 --port $PORT --workers 4
     envVars:
       - key: PYTHON_VERSION
         value: 3.9

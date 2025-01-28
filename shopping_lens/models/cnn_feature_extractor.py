@@ -8,7 +8,7 @@ from .base_model import BaseModel
 class CNNFeatureExtractor(BaseModel):
     def __init__(self):
         super().__init__()
-        # Initialize ResNet50 without classification head
+        # Initialize with pretrained weights by default
         self.model = models.resnet50(weights=ResNet50_Weights.IMAGENET1K_V1)
         # Remove the final FC layer
         self.model = nn.Sequential(*list(self.model.children())[:-1])
@@ -46,3 +46,8 @@ class CNNFeatureExtractor(BaseModel):
             features = torch.nn.functional.normalize(features, p=2, dim=1)
             
             return features.cpu()  # Return features on CPU for storage
+
+    def load_state_dict(self, state_dict):
+        # Only load state dict if we want to override pretrained weights
+        self.model.load_state_dict(state_dict)
+        self.model.eval()
