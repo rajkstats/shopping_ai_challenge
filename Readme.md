@@ -17,7 +17,7 @@
 
 A deep learning-based visual search system comparing different architectures for fashion item retrieval, focusing on shoe product search.
 
-### What It Does (Simple Version)
+### What It Does 
 Imagine you're shopping online and see a pair of shoes you like, but maybe they're too expensive or out of stock. You want to find similar shoes. That's what this project does! Here's how it works:
 
 1. **Taking Pictures Apart**: We use different AI models (like CNN, CLIP, ViT, and Autoencoder) that look at shoe images and break them down into important features (like shape, color, style).
@@ -370,7 +370,7 @@ Think of the Autoencoder as an artist learning to draw shoes from memory:
 4. Gets better by comparing its drawing with the original
 5. Eventually learns to capture the most important features in those 128 numbers
 
-#### Results in Simple Terms
+#### Results
 - CLIP and ViT did amazingly well (100% accuracy) but might be "memorizing" since we had only 38 images
 - CNN struggled a bit (7.89% accuracy) but is more honest about its limitations
 - Autoencoder is good at recreating shoes but we can't measure accuracy the same way
