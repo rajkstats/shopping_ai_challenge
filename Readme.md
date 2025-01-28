@@ -230,21 +230,27 @@ Think of it like having different experts looking at shoes:
 
 1. Download test images:
 
-bash
+```bash
 python -m shopping_lens.scripts.download_test_images
+```
 
 2. Index the images (required for search):
 
+```bash
 python -m shopping_lens.scripts.index_test_images
+```
 
 3. Start the server:
 
+```bash
 python -m shopping_lens.api.main
+```
 
 4. Open http://localhost:8001 in your browser
 
 If you get a port binding error (address already in use), free port 8001:
 
+```bash
 lsof -i :8001 # Find process using port 8001
 kill -9 <PID> # Kill the process
 
