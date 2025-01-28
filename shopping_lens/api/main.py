@@ -202,35 +202,34 @@ async def search(model_name: str, file: UploadFile):
             # Use the correct index suffix
             base_model_name = model_name.split('_')[0]
             index_path = BASE_DIR / "data" / "index" / f"{base_model_name}{config['index_suffix']}_index"
+            faiss_path = Path(str(index_path) + ".faiss")
+            meta_path = Path(str(index_path) + ".meta")
             
-            try:
-                if not index_path.exists():
-                    logger.error(f"Index not found at {index_path}")
-                    # Try using pretrained index if finetuned not found
-                    if config['index_suffix'] == '_finetuned':
-                        pretrained_index = BASE_DIR / "data" / "index" / f"{base_model_name}_pretrained_index"
-                        if pretrained_index.exists():
-                            logger.info(f"Using pretrained index instead: {pretrained_index}")
-                            index_path = pretrained_index
-                        else:
-                            raise HTTPException(
-                                status_code=500,
-                                detail=f"No index found for {model_name}"
-                            )
+            if not (faiss_path.exists() and meta_path.exists()):
+                logger.error(f"Index files not found at {index_path}")
+                logger.error(f"FAISS exists: {faiss_path.exists()}, Meta exists: {meta_path.exists()}")
+                # Try using pretrained index if finetuned not found
+                if config['index_suffix'] == '_finetuned':
+                    pretrained_base = BASE_DIR / "data" / "index" / f"{base_model_name}_pretrained_index"
+                    pretrained_faiss = Path(str(pretrained_base) + ".faiss")
+                    pretrained_meta = Path(str(pretrained_base) + ".meta")
+                    if pretrained_faiss.exists() and pretrained_meta.exists():
+                        logger.info(f"Using pretrained index instead: {pretrained_base}")
+                        index_path = pretrained_base
+                        faiss_path = pretrained_faiss
+                        meta_path = pretrained_meta
                     else:
                         raise HTTPException(
                             status_code=500,
                             detail=f"No index found for {model_name}"
                         )
-                
-                similarity_search.load_index(str(index_path))
-                
-            except Exception as e:
-                logger.error(f"Error loading index: {e}")
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Failed to load index for {model_name}: {str(e)}"
-                )
+                else:
+                    raise HTTPException(
+                        status_code=500,
+                        detail=f"No index found for {model_name}"
+                    )
+            
+            similarity_search.load_index(str(index_path))
             
             contents = await file.read()
             image = Image.open(io.BytesIO(contents)).convert('RGB')
@@ -278,6 +277,33 @@ async def search(model_name: str, file: UploadFile):
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
+
+@app.get("/check-indices")
+async def check_indices():
+    """Debug endpoint to check index files"""
+    try:
+        indices = {}
+        for model_name in ['cnn', 'clip', 'vit', 'autoencoder']:
+            for suffix in ['_pretrained', '_finetuned']:
+                index_path = BASE_DIR / "data" / "index" / f"{model_name}{suffix}_index"
+                faiss_path = Path(str(index_path) + ".faiss")
+                meta_path = Path(str(index_path) + ".meta")
+                indices[f"{model_name}{suffix}"] = {
+                    "index_exists": index_path.exists(),
+                    "faiss_exists": faiss_path.exists(),
+                    "meta_exists": meta_path.exists(),
+                    "index_path": str(index_path),
+                    "faiss_path": str(faiss_path),
+                    "meta_path": str(meta_path)
+                }
+        return {
+            "base_dir": str(BASE_DIR),
+            "index_dir": str(index_dir),
+            "indices": indices,
+            "files_in_index_dir": [str(f) for f in index_dir.glob("*")]
+        }
+    except Exception as e:
+        return {"error": str(e)}
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8001))
