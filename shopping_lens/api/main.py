@@ -6,6 +6,7 @@ import torch
 from PIL import Image
 import io
 import os
+import logging
 
 # Import all models
 from ..models.cnn_feature_extractor import CNNFeatureExtractor
@@ -18,13 +19,21 @@ from ..scripts.index_test_images import index_images
 
 app = FastAPI()
 
-# Update the static files directory path
-static_dir = Path(__file__).parent / "static"
-app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# Update model paths to be relative to the project root
-BASE_DIR = Path(__file__).parent.parent
+# Update paths to be absolute
+BASE_DIR = Path(__file__).parent.parent.absolute()
+static_dir = BASE_DIR / "api" / "static"
+test_images_dir = BASE_DIR / "data" / "test_images"
+index_dir = BASE_DIR / "data" / "index"
 
+# Ensure directories exist
+test_images_dir.mkdir(parents=True, exist_ok=True)
+index_dir.mkdir(parents=True, exist_ok=True)
+
+# Update model paths to be absolute
 MODEL_CONFIGS = {
     'cnn': {
         'class': CNNFeatureExtractor,
@@ -73,25 +82,47 @@ MODEL_CONFIGS = {
     }
 }
 
-# Add startup event
 @app.on_event("startup")
 async def startup_event():
-    """Create indices on startup if they don't exist"""
+    """Initialize app on startup"""
     try:
-        # Check if indices exist
-        index_dir = Path(__file__).parent.parent / "data" / "index"
-        if not index_dir.exists() or not any(index_dir.iterdir()):
-            print("Creating indices...")
-            # Create indices for all models
+        logger.info("Starting application initialization...")
+        
+        # Ensure test images exist
+        if not any(test_images_dir.glob("*.jpg")):
+            logger.info("Downloading test images...")
+            from ..scripts.download_test_images import download_images
+            download_images()
+        
+        # Create indices if they don't exist
+        if not any(index_dir.glob("*_index")):
+            logger.info("Creating indices...")
             for model_name in ['cnn', 'clip', 'vit', 'autoencoder']:
                 try:
+                    logger.info(f"Creating index for {model_name}...")
                     index_images(model_name, use_finetuned=False)
                     index_images(model_name, use_finetuned=True)
                 except Exception as e:
-                    print(f"Error indexing {model_name}: {e}")
-            print("Indices created successfully")
+                    logger.error(f"Error indexing {model_name}: {e}")
+        
+        logger.info("Application initialization complete")
     except Exception as e:
-        print(f"Error during startup: {e}")
+        logger.error(f"Error during startup: {e}")
+        raise e
+
+@app.get("/debug")
+async def debug_info():
+    """Endpoint to check system state"""
+    return {
+        "base_dir": str(BASE_DIR),
+        "test_images": [f.name for f in test_images_dir.glob("*.jpg")],
+        "indices": [f.name for f in index_dir.glob("*_index")],
+        "static_files": [f.name for f in static_dir.glob("*.*")],
+        "model_configs": {k: {
+            "dimension": v["dimension"],
+            "weights_exists": Path(v["weights_path"]).exists() if "weights_path" in v else False
+        } for k, v in MODEL_CONFIGS.items()}
+    }
 
 @app.get("/")
 async def root():

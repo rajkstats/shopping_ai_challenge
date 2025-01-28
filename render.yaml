@@ -14,7 +14,7 @@ services:
       pip install -r requirements.txt
       mkdir -p shopping_lens/data/test_images
       python -m shopping_lens.scripts.download_test_images
-    startCommand: uvicorn shopping_lens.api.main:app --host 0.0.0.0 --port $PORT
+    startCommand: uvicorn shopping_lens.api.main:app --host 0.0.0.0 --port $PORT --log-level debug
     envVars:
       - key: PYTHON_VERSION
         value: 3.9
@@ -22,5 +22,12 @@ services:
         value: .
       - key: DEBIAN_FRONTEND
         value: noninteractive
+      - key: LOG_LEVEL
+        value: DEBUG
     healthCheckPath: /health
-    healthCheckTimeout: 100 
+    healthCheckTimeout: 100
+    autoDeploy: false
+    disk:
+      name: data
+      mountPath: /opt/render/project/src/shopping_lens/data
+      sizeGB: 1 
