@@ -40,4 +40,5 @@ services:
     disk:
       name: data
       mountPath: /opt/render/project/src/shopping_lens/data
-      sizeGB: 1 
+      sizeGB: 1
+    plan: starter 

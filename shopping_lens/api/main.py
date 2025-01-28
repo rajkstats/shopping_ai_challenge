@@ -7,6 +7,8 @@ from PIL import Image
 import io
 import os
 import logging
+import gc
+import torch.cuda
 
 # Import all models
 from ..models.cnn_feature_extractor import CNNFeatureExtractor
@@ -86,6 +88,9 @@ MODEL_CONFIGS = {
 app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 app.mount("/images", StaticFiles(directory=str(test_images_dir)), name="images")
 
+# Add model cache
+model_cache = {}
+
 @app.on_event("startup")
 async def startup_event():
     """Initialize app on startup"""
@@ -126,12 +131,23 @@ async def get_image(image_name: str):
     image_path = Path(__file__).parent.parent / "data" / "test_images" / image_name
     return FileResponse(str(image_path))
 
-# Add error handling for model loading
 def load_model(model_name, config):
+    """Load model with memory management"""
     try:
+        # Clear memory if needed
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        gc.collect()
+        
+        # Check cache
+        if model_name in model_cache:
+            logger.info(f"Using cached model {model_name}")
+            return model_cache[model_name]
+        
+        logger.info(f"Loading model {model_name}")
         model = config['class']()
         
-        # Load weights if available and exists
+        # Load weights if available
         if 'weights_path' in config:
             weights_path = Path(config['weights_path'])
             if weights_path.exists():
@@ -139,6 +155,18 @@ def load_model(model_name, config):
                 logger.info(f"Loaded fine-tuned weights for {model_name}")
             else:
                 logger.info(f"Using pretrained weights for {model_name}")
+        
+        # Cache the model
+        model_cache[model_name] = model
+        
+        # Clear old models if cache is too large
+        if len(model_cache) > 2:  # Keep only 2 models in memory
+            oldest_model = next(iter(model_cache))
+            if oldest_model != model_name:
+                del model_cache[oldest_model]
+                gc.collect()
+                logger.info(f"Cleared {oldest_model} from cache")
+        
         return model
     except Exception as e:
         logger.error(f"Error loading model {model_name}: {e}")
@@ -149,93 +177,101 @@ async def search(model_name: str, file: UploadFile):
     try:
         if model_name not in MODEL_CONFIGS:
             raise HTTPException(status_code=400, detail=f"Invalid model name: {model_name}")
-            
-        config = MODEL_CONFIGS[model_name]
-        model = load_model(model_name, config)
         
-        if model is None:
-            # Fallback to pretrained version if available
-            pretrained_name = f"{model_name}_pretrained"
-            if pretrained_name in MODEL_CONFIGS:
-                logger.info(f"Falling back to pretrained model: {pretrained_name}")
-                model = load_model(pretrained_name, MODEL_CONFIGS[pretrained_name])
+        config = MODEL_CONFIGS[model_name]
+        model = None
+        
+        try:
+            model = load_model(model_name, config)
+            if model is None:
+                # Fallback to pretrained
+                pretrained_name = f"{model_name}_pretrained"
+                if pretrained_name in MODEL_CONFIGS:
+                    logger.info(f"Falling back to pretrained model: {pretrained_name}")
+                    model = load_model(pretrained_name, MODEL_CONFIGS[pretrained_name])
             
             if model is None:
                 raise HTTPException(
                     status_code=500,
                     detail=f"Failed to load model {model_name} and its fallback"
                 )
-        
-        preprocessor = ImagePreprocessor()
-        similarity_search = SimilaritySearch(dimension=config['dimension'])
-        
-        # Use the correct index suffix
-        base_model_name = model_name.split('_')[0]
-        index_path = BASE_DIR / "data" / "index" / f"{base_model_name}{config['index_suffix']}_index"
-        
-        try:
-            if not index_path.exists():
-                logger.error(f"Index not found at {index_path}")
-                # Try using pretrained index if finetuned not found
-                if config['index_suffix'] == '_finetuned':
-                    pretrained_index = BASE_DIR / "data" / "index" / f"{base_model_name}_pretrained_index"
-                    if pretrained_index.exists():
-                        logger.info(f"Using pretrained index instead: {pretrained_index}")
-                        index_path = pretrained_index
+            
+            preprocessor = ImagePreprocessor()
+            similarity_search = SimilaritySearch(dimension=config['dimension'])
+            
+            # Use the correct index suffix
+            base_model_name = model_name.split('_')[0]
+            index_path = BASE_DIR / "data" / "index" / f"{base_model_name}{config['index_suffix']}_index"
+            
+            try:
+                if not index_path.exists():
+                    logger.error(f"Index not found at {index_path}")
+                    # Try using pretrained index if finetuned not found
+                    if config['index_suffix'] == '_finetuned':
+                        pretrained_index = BASE_DIR / "data" / "index" / f"{base_model_name}_pretrained_index"
+                        if pretrained_index.exists():
+                            logger.info(f"Using pretrained index instead: {pretrained_index}")
+                            index_path = pretrained_index
+                        else:
+                            raise HTTPException(
+                                status_code=500,
+                                detail=f"No index found for {model_name}"
+                            )
                     else:
                         raise HTTPException(
                             status_code=500,
                             detail=f"No index found for {model_name}"
                         )
-                else:
-                    raise HTTPException(
-                        status_code=500,
-                        detail=f"No index found for {model_name}"
-                    )
+                
+                similarity_search.load_index(str(index_path))
+                
+            except Exception as e:
+                logger.error(f"Error loading index: {e}")
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Failed to load index for {model_name}: {str(e)}"
+                )
             
-            similarity_search.load_index(str(index_path))
+            contents = await file.read()
+            image = Image.open(io.BytesIO(contents)).convert('RGB')
             
-        except Exception as e:
-            logger.error(f"Error loading index: {e}")
-            raise HTTPException(
-                status_code=500,
-                detail=f"Failed to load index for {model_name}: {str(e)}"
-            )
+            temp_path = BASE_DIR / "data" / "temp.jpg"
+            image.save(temp_path)
+            
+            try:
+                image_tensor = preprocessor.preprocess_image(str(temp_path))
+                features = model.extract_features(image_tensor)
+                paths, scores = similarity_search.search(features, k=5)
+                
+                if temp_path.exists():
+                    temp_path.unlink()
+                
+                results = [
+                    {"path": Path(path).name, "similarity": float(score)} 
+                    for path, score in zip(paths, scores)
+                ]
+                
+                return {"similar_images": results}
+                
+            except Exception as e:
+                logger.error(f"Error during search: {e}")
+                if temp_path.exists():
+                    temp_path.unlink()
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Search failed: {str(e)}"
+                )
+            
+        finally:
+            # Clean up
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            gc.collect()
         
-        contents = await file.read()
-        image = Image.open(io.BytesIO(contents)).convert('RGB')
+        return {"similar_images": results}
         
-        temp_path = BASE_DIR / "data" / "temp.jpg"
-        image.save(temp_path)
-        
-        try:
-            image_tensor = preprocessor.preprocess_image(str(temp_path))
-            features = model.extract_features(image_tensor)
-            paths, scores = similarity_search.search(features, k=5)
-            
-            if temp_path.exists():
-                temp_path.unlink()
-            
-            results = [
-                {"path": Path(path).name, "similarity": float(score)} 
-                for path, score in zip(paths, scores)
-            ]
-            
-            return {"similar_images": results}
-            
-        except Exception as e:
-            logger.error(f"Error during search: {e}")
-            if temp_path.exists():
-                temp_path.unlink()
-            raise HTTPException(
-                status_code=500,
-                detail=f"Search failed: {str(e)}"
-            )
-        
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"Unexpected error in search: {str(e)}")
+        logger.error(f"Error in search: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # Add health check endpoint
