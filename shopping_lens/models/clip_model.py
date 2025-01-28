@@ -7,12 +7,10 @@ from .base_model import BaseModel
 class CLIPFeatureExtractor(BaseModel):
     def __init__(self):
         super().__init__()
-        self.model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
-        self.processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+        self.model = None
+        self.processor = None
         self.feature_dimension = 512
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.model = self.model.to(self.device)
-        self.model.eval()
         self.classes = None  # Will be set during training
     
     def set_classes(self, classes):
@@ -59,3 +57,9 @@ class CLIPFeatureExtractor(BaseModel):
             features = torch.nn.functional.normalize(features, p=2, dim=1)
             
             return features.cpu()  # Return features on CPU for storage
+
+    def load_pretrained(self, model_path, processor_path):
+        self.model = CLIPModel.from_pretrained(model_path)
+        self.processor = CLIPProcessor.from_pretrained(processor_path)
+        self.model = self.model.to(self.device)
+        self.model.eval()

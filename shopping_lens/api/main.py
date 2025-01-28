@@ -41,17 +41,21 @@ MODEL_CONFIGS = {
         'class': CNNFeatureExtractor,
         'dimension': 2048,
         'weights_path': str(BASE_DIR / 'models/weights/cnn_finetuned.pth'),
+        'pretrained_path': str(BASE_DIR / 'models/pretrained/resnet50_pretrained.pth'),
         'index_suffix': '_finetuned'
     },
     'cnn_pretrained': {
         'class': CNNFeatureExtractor,
         'dimension': 2048,
+        'weights_path': str(BASE_DIR / 'models/pretrained/resnet50_pretrained.pth'),
         'index_suffix': '_pretrained'
     },
     'clip': {
         'class': CLIPFeatureExtractor,
         'dimension': 512,
-        'weights_path': 'models/weights/clip_finetuned.pth',
+        'weights_path': str(BASE_DIR / 'models/weights/clip_finetuned.pth'),
+        'pretrained_path': str(BASE_DIR / 'models/pretrained/clip_model'),
+        'processor_path': str(BASE_DIR / 'models/pretrained/clip_processor'),
         'index_suffix': '_finetuned'
     },
     'clip_pretrained': {
@@ -134,12 +138,6 @@ async def get_image(image_name: str):
 def load_model(model_name, config):
     """Load model with memory management"""
     try:
-        # Clear memory if needed
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-        gc.collect()
-        
-        # Check cache
         if model_name in model_cache:
             logger.info(f"Using cached model {model_name}")
             return model_cache[model_name]
@@ -147,27 +145,29 @@ def load_model(model_name, config):
         logger.info(f"Loading model {model_name}")
         model = config['class']()
         
-        # Load weights if available
+        # Load pretrained weights first if available
+        if 'pretrained_path' in config:
+            pretrained_path = Path(config['pretrained_path'])
+            if pretrained_path.exists():
+                if isinstance(model, CLIPFeatureExtractor):
+                    model.load_pretrained(
+                        config['pretrained_path'],
+                        config['processor_path']
+                    )
+                else:
+                    model.load_state_dict(torch.load(pretrained_path, map_location='cpu'))
+                logger.info(f"Loaded pretrained weights for {model_name}")
+        
+        # Then load fine-tuned weights if available
         if 'weights_path' in config:
             weights_path = Path(config['weights_path'])
             if weights_path.exists():
                 model.load_state_dict(torch.load(weights_path, map_location='cpu'))
                 logger.info(f"Loaded fine-tuned weights for {model_name}")
-            else:
-                logger.info(f"Using pretrained weights for {model_name}")
         
-        # Cache the model
         model_cache[model_name] = model
-        
-        # Clear old models if cache is too large
-        if len(model_cache) > 2:  # Keep only 2 models in memory
-            oldest_model = next(iter(model_cache))
-            if oldest_model != model_name:
-                del model_cache[oldest_model]
-                gc.collect()
-                logger.info(f"Cleared {oldest_model} from cache")
-        
         return model
+        
     except Exception as e:
         logger.error(f"Error loading model {model_name}: {e}")
         return None
