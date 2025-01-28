@@ -136,12 +136,12 @@ def load_model(model_name, config):
             weights_path = Path(config['weights_path'])
             if weights_path.exists():
                 model.load_state_dict(torch.load(weights_path, map_location='cpu'))
-                print(f"Loaded weights for {model_name} from {weights_path}")
+                logger.info(f"Loaded fine-tuned weights for {model_name}")
             else:
-                print(f"Warning: No weights found at {weights_path}, using base model")
+                logger.info(f"Using pretrained weights for {model_name}")
         return model
     except Exception as e:
-        print(f"Error loading model {model_name}: {e}")
+        logger.error(f"Error loading model {model_name}: {e}")
         return None
 
 @app.post("/search")

@@ -14,6 +14,8 @@ services:
       pip install -r requirements.txt
       mkdir -p shopping_lens/data/test_images
       mkdir -p shopping_lens/data/index
+      mkdir -p /opt/render/.cache/torch/hub/checkpoints
+      python -m shopping_lens.scripts.download_models
       python -m shopping_lens.scripts.download_test_images
     startCommand: uvicorn shopping_lens.api.main:app --host 0.0.0.0 --port $PORT --log-level debug
     envVars:
@@ -25,6 +27,12 @@ services:
         value: noninteractive
       - key: LOG_LEVEL
         value: DEBUG
+      - key: TORCH_HOME
+        value: /opt/render/.cache/torch
+      - key: TRANSFORMERS_CACHE
+        value: /opt/render/.cache/huggingface
+      - key: HF_HOME
+        value: /opt/render/.cache/huggingface
     healthCheckPath: /health
     healthCheckTimeout: 100
     autoDeploy: false
